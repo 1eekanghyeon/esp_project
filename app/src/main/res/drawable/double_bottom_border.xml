@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- 배경 색상 -->
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="@android:color/transparent" />
+        </shape>
+    </item>
+
+    <!-- 첫 번째 하단 테두리 선 -->
+    <item
+        android:left="-2dp"
+        android:right="-2dp"
+        android:top="-2dp"
+        android:bottom="4dp"> <!-- 첫 번째 선과 두 번째 선 사이의 공간 조정 -->
+        <shape android:shape="rectangle">
+            <stroke
+                android:width="1dp"
+                android:color="@android:color/black" />
+        </shape>
+    </item>
+
+    <!-- 두 번째 하단 테두리 선 -->
+    <item
+        android:left="-2dp"
+        android:right="-2dp"
+        android:top="-2dp"
+        android:bottom="0dp"> <!-- 레이아웃 하단에 정확히 맞추기 -->
+        <shape android:shape="rectangle">
+            <stroke
+                android:width="2dp"
+                android:color="@android:color/black" /> <!-- 두 번째 선의 색상과 두께를 첫 번째 선과 다르게 설정 -->
+        </shape>
+    </item>
+</layer-list>

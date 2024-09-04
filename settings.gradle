@@ -1,0 +1,16 @@
+pluginManagement {
+    repositories {
+        google()
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS) // 변경
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+rootProject.name = "ESP"
+include ':app'

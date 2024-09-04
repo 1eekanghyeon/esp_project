@@ -1,0 +1,17 @@
+<resources>
+    <!-- DeviceScanActivity 전용 테마 -->
+    <style name="Theme.DeviceScan" parent="android:Theme.Holo.Light">
+        <!-- Customize your theme here. -->
+        <item name="colorPrimary">@color/blue3</item>
+        <item name="colorPrimaryDark">@color/blue2_dark</item>
+        <item name="colorAccent">@color/teal_200</item>
+        <item name="windowActionBar">true</item>
+        <item name="windowNoTitle">false</item>
+    </style>
+
+    <!-- Theme for DeviceScanActivity that needs an ActionBar -->
+    <style name="Theme.DeviceScan.WithActionBar" parent="android:Theme.Holo.Light">
+        <item name="windowActionBar">true</item>
+        <item name="windowNoTitle">false</item>
+    </style>
+</resources>
