@@ -4,8 +4,10 @@ import androidx.appcompat.app.ActionBar;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.constraintlayout.widget.ConstraintLayout;
 
+import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
+import android.content.ServiceConnection;
 import android.content.SharedPreferences;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
@@ -14,6 +16,7 @@ import android.graphics.ColorMatrix;
 import android.graphics.ColorMatrixColorFilter;
 import android.graphics.Paint;
 import android.os.Bundle;
+import android.os.IBinder;
 import android.util.Log;
 import android.view.View;
 import android.widget.Button;
@@ -56,8 +59,10 @@ import java.util.Map;
 import java.util.TimeZone;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import android.content.SharedPreferences;
 
 public class Layout2EditActivity extends AppCompatActivity {
+    private static final String TAG = "Layout2EditActivity";
 
     private EditText editText_Name, editText_Degree, editText_WorkState, editText_custom;
     private GoogleSignInClient googleSignInClient;
@@ -70,7 +75,9 @@ public class Layout2EditActivity extends AppCompatActivity {
     private static final int BITMAP_HEIGHT = 300;
     private static final int TEXT_SIZE_MAX = 35;
     private static final int BINARY_THRESHOLD = 128;
-
+    private BluetoothLeService mBluetoothLeService;
+    private boolean mConnected = false;
+    private String mDeviceAddress;
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -86,6 +93,9 @@ public class Layout2EditActivity extends AppCompatActivity {
         editText_WorkState = findViewById(R.id.editText_WorkState);
         editText_custom = findViewById(R.id.editText_custom);
 
+        // BluetoothLeService에 연결
+        Intent gattServiceIntent = new Intent(this, BluetoothLeService.class);
+        bindService(gattServiceIntent, mServiceConnection, Context.BIND_AUTO_CREATE);
         // button_Update 버튼 찾기
         Button buttonUpdate = findViewById(R.id.button_Update);
         buttonUpdate.setOnClickListener(new View.OnClickListener() {
@@ -143,6 +153,24 @@ public class Layout2EditActivity extends AppCompatActivity {
             initializeGoogleCalendarService(account);
         }
     }
+
+    // 서비스 연결 처리
+    private final ServiceConnection mServiceConnection = new ServiceConnection() {
+        @Override
+        public void onServiceConnected(ComponentName componentName, IBinder service) {
+            mBluetoothLeService = ((BluetoothLeService.LocalBinder) service).getService();
+            if (!mBluetoothLeService.initialize()) {
+                Log.e(TAG, "Unable to initialize Bluetooth");
+                finish();
+            }
+
+        }
+
+        @Override
+        public void onServiceDisconnected(ComponentName componentName) {
+            mBluetoothLeService = null;
+        }
+    };
 
     private void signIn() {
         Intent signInIntent = googleSignInClient.getSignInIntent();
@@ -420,10 +448,20 @@ public class Layout2EditActivity extends AppCompatActivity {
         saveHexArrayToFile(getApplicationContext(), hexArray_no_ED, filename);
 
         // 사용자 이름 가져오기
-        String userName = editText_Name.getText().toString();
+        SharedPreferences sharedPreferences = getSharedPreferences("AppPrefs", MODE_PRIVATE);
+        String userName = sharedPreferences.getString("userName", "defaultUserName");
 
         // Firestore에 업로드
-        uploadHexArrayToFirestore(hexArray, userName);
+        if (mBluetoothLeService != null && mBluetoothLeService.isConnected()) {
+            // BLE로 데이터 전송
+            Log.d("BLEStatus", "BLE Connected: " + mBluetoothLeService.isConnected());
+            mBluetoothLeService.sendHexArrayInChunks(hexArray);
+            Toast.makeText(Layout2EditActivity.this, "Data sent via BLE", Toast.LENGTH_SHORT).show();
+        } else {
+            // Firestore에 데이터 업로드
+            uploadHexArrayToFirestore(hexArray, userName);
+            Toast.makeText(Layout2EditActivity.this, "Data uploaded to Firestore", Toast.LENGTH_SHORT).show();
+        }
 
         // 실시간 일정 업데이트
         fetchCalendarEvents();
@@ -681,6 +719,13 @@ public class Layout2EditActivity extends AppCompatActivity {
                     Log.w("Firestore", "Error adding document", e);
                     Toast.makeText(Layout2EditActivity.this, "Error uploading data: " + e.getMessage(), Toast.LENGTH_LONG).show();
                 });
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        unbindService(mServiceConnection);
+        mBluetoothLeService = null;
     }
 
     // EditText 내용 로드

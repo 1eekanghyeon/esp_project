@@ -117,7 +117,22 @@ public class DeviceScanActivity extends ListActivity {
             return;
         }
     }
-
+    // 여기서부터 onRequestPermissionsResult 추가됨
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == PERMISSIONS_REQUEST_CODE) {
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                // 권한이 승인되었을 때 BLE 스캔 등의 작업을 실행할 수 있음
+                Toast.makeText(this, "권한이 승인되었습니다.", Toast.LENGTH_SHORT).show();
+            } else {
+                // 권한이 거부되었을 때 앱을 종료할 수 있음
+                Toast.makeText(this, "권한이 필요합니다. 앱이 종료됩니다.", Toast.LENGTH_SHORT).show();
+                finish();
+            }
+        }
+    }
+    // 여기까지 onRequestPermissionsResult 추가됨
     // 액티비티가 시작될 때 시스템에 의해 자동으로 호출되어 메뉴를 설정
     // 옵션 메뉴 생성: 스캔 중 상태에 따라 아이템 가시성 조정
     @Override

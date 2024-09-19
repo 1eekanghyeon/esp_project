@@ -23,6 +23,10 @@ import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.Toast;
+import android.content.ServiceConnection;
+import android.content.ComponentName;
+import android.os.IBinder;
+
 
 import com.google.android.gms.auth.api.signin.GoogleSignIn;
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount;
@@ -63,6 +67,8 @@ import java.util.concurrent.Executors;
 
 
 public class Layout1EditActivity extends AppCompatActivity {
+    private static final String TAG = "Layout1EditActivity";
+
 
     private EditText editText_Name, editText_Degree, editText_WorkState, editText_custom1, editText_custom2;
     private GoogleSignInClient googleSignInClient;
@@ -75,6 +81,11 @@ public class Layout1EditActivity extends AppCompatActivity {
     private static final int BITMAP_HEIGHT = 300;
     private static final int TEXT_SIZE_MAX = 35;
     private static final int BINARY_THRESHOLD = 128;
+
+
+    private BluetoothLeService mBluetoothLeService;
+    private boolean mConnected = false;
+    private String mDeviceAddress;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -94,6 +105,14 @@ public class Layout1EditActivity extends AppCompatActivity {
 
         // editText 내용 불러오기
         loadAllEditTextContents();
+        // DeviceControlActivity에서 이미 연결된 상태로 넘어옴
+        Intent intent = getIntent();
+        mDeviceAddress = intent.getStringExtra(DeviceControlActivity.EXTRAS_DEVICE_ADDRESS);
+
+        // BluetoothLeService에 연결
+        Intent gattServiceIntent = new Intent(this, BluetoothLeService.class);
+        bindService(gattServiceIntent, mServiceConnection, Context.BIND_AUTO_CREATE);
+
 
         // button_Update 버튼 찾기
         Button buttonUpdate = findViewById(R.id.button_Update);
@@ -148,6 +167,25 @@ public class Layout1EditActivity extends AppCompatActivity {
             initializeGoogleCalendarService(account);
         }
     }
+
+    // 서비스 연결 처리
+    private final ServiceConnection mServiceConnection = new ServiceConnection() {
+        @Override
+        public void onServiceConnected(ComponentName componentName, IBinder service) {
+            mBluetoothLeService = ((BluetoothLeService.LocalBinder) service).getService();
+            if (!mBluetoothLeService.initialize()) {
+                Log.e(TAG, "Unable to initialize Bluetooth");
+                finish();
+            }
+
+        }
+
+        @Override
+        public void onServiceDisconnected(ComponentName componentName) {
+            mBluetoothLeService = null;
+        }
+    };
+
 
     private void signIn() {
         Intent signInIntent = googleSignInClient.getSignInIntent();
@@ -416,37 +454,48 @@ public class Layout1EditActivity extends AppCompatActivity {
         int height = bitmap.getHeight();
         Log.d("BitmapInfo", "Bitmap size: " + width + "x" + height);
 
-        // 비트맵을 파일로 저장
-        String filename = "snapshot_bitmap.jpg";
-        saveBitmapToFile(getApplicationContext(), bitmap, filename);
+//        // 비트맵을 파일로 저장
+//        String filename = "snapshot_bitmap.jpg";
+//        saveBitmapToFile(getApplicationContext(), bitmap, filename);
 
         // 캡처된 비트맵을 흑백(gray scale)으로 변환
         Bitmap grayscaleBitmap = convertToGrayscale(bitmap);
-        filename = "grayscale_bitmap.jpg";
-        saveBitmapToFile(getApplicationContext(), grayscaleBitmap, filename);
+//        filename = "grayscale_bitmap.jpg";
+//        saveBitmapToFile(getApplicationContext(), grayscaleBitmap, filename);
 
         // grayscaleBitmap 비트맵을 error diffusion 하여 binary array로 변환
         int[][] binaryArray = applyErrorDiffusionToBinaryArray(grayscaleBitmap);
         String[][] hexArray = convertBinaryArrayToHexArray(binaryArray);
-        filename = "hexArray_error_diffusion.txt";
-        saveHexArrayToFile(getApplicationContext(), hexArray, filename);
+//        filename = "hexArray_error_diffusion.txt";
+//        saveHexArrayToFile(getApplicationContext(), hexArray, filename);
 
         // 0~255 사이의 흑백값을 0, 1의 binary 값으로 변환
         Bitmap binaryBitmap = convertToBinary(grayscaleBitmap, BINARY_THRESHOLD);
         int[][] binarybitmap2array = convertBitmapToBinaryArray(binaryBitmap, BINARY_THRESHOLD);
-        filename = "binary_no_error_diffusion.txt";
-        saveIntArrayToFile(getApplicationContext(), binarybitmap2array, filename);
+//        filename = "binary_no_error_diffusion.txt";
+//        saveIntArrayToFile(getApplicationContext(), binarybitmap2array, filename);
 
         String[][] hexArray_no_ED = convertBinaryArrayToHexArray(binarybitmap2array);
-        filename = "hexArray_no_error_diffusion.txt";
-        saveHexArrayToFile(getApplicationContext(), hexArray_no_ED, filename);
+//        filename = "hexArray_no_error_diffusion.txt";
+//        saveHexArrayToFile(getApplicationContext(), hexArray_no_ED, filename);
 
-        // 사용자 이름 가져오기
-        String userName = editText_Name.getText().toString();
+        // SharedPreferences에서 저장된 사용자 이름을 가져오는 코드
+        SharedPreferences sharedPreferences = getSharedPreferences("AppPrefs", MODE_PRIVATE);
+        String userName = sharedPreferences.getString("userName", "");  // 저장된 사용자 이름을 가져옴
 
-        // Firestore에 업로드
-        uploadHexArrayToFirestore(hexArray, userName);
-
+        Log.d("BLE_DEBUG", "mConnected status: " + mConnected);
+        Log.d("BLE_DEBUG", "mConnected status: " + mBluetoothLeService.isConnected());  // 연결 상태 확인
+        // BLE 연결 상태에 따라 처리
+        if (mBluetoothLeService != null && mBluetoothLeService.isConnected()) {
+            // BLE로 데이터 전송
+            Log.d("BLEStatus", "BLE Connected: " + mBluetoothLeService.isConnected());
+            mBluetoothLeService.sendHexArrayInChunks(hexArray);
+            Toast.makeText(Layout1EditActivity.this, "Data sent via BLE", Toast.LENGTH_SHORT).show();
+        } else {
+            // Firestore에 데이터 업로드
+            uploadHexArrayToFirestore(hexArray, userName);
+            Toast.makeText(Layout1EditActivity.this, "Data uploaded to Firestore", Toast.LENGTH_SHORT).show();
+        }
         // 실시간 일정 업데이트
         fetchCalendarEvents();
 
@@ -705,6 +754,13 @@ public class Layout1EditActivity extends AppCompatActivity {
                     Log.w("Firestore", "Error adding document", e);
                     Toast.makeText(Layout1EditActivity.this, "Error uploading data: " + e.getMessage(), Toast.LENGTH_LONG).show();
                 });
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        unbindService(mServiceConnection);
+        mBluetoothLeService = null;
     }
 
 
