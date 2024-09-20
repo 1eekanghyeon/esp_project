@@ -47,6 +47,9 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Arrays;
+import android.os.Handler;
+import android.os.Looper;
+
 /**
  * Service for managing connection and data communication with a GATT server hosted on a
  * given Bluetooth LE device.
@@ -61,10 +64,10 @@ public class BluetoothLeService extends Service {
 
     private BluetoothManager mBluetoothManager;
     private BluetoothAdapter mBluetoothAdapter;
-    private String mBluetoothDeviceAddress;
-    private BluetoothGatt mBluetoothGatt;
     private int mConnectionState = STATE_DISCONNECTED;
     private final ExecutorService executorService = Executors.newSingleThreadExecutor();
+    private String mBluetoothDeviceAddress;
+    private BluetoothGatt mBluetoothGatt;
     // 연결 상태를 나타내는 상수
     private static final int STATE_DISCONNECTED = 0;
     private static final int STATE_CONNECTING = 1;
@@ -130,9 +133,11 @@ public class BluetoothLeService extends Service {
                 Log.d(TAG, "mConnected set to false");  // 디버그 메시지 추가
                 broadcastUpdate(intentAction);
 
-                // 자동 재연결 시도
-                Log.i(TAG, "Attempting to reconnect...");
-                connect(mBluetoothDeviceAddress);
+                // 자동 재연결 시도, 5초 후에 재연결
+                new Handler(Looper.getMainLooper()).postDelayed(() -> {
+                    Log.i(TAG, "Attempting to reconnect...");
+                    connect(mBluetoothDeviceAddress);
+                }, 5000);  // 5초 후 재연결 시도
             }
         }
         @Override
@@ -295,9 +300,19 @@ public class BluetoothLeService extends Service {
             return false;
         }
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            if (getApplicationContext().checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-                Log.e(TAG, "Location permission not granted.");
+        // Android 12 (API 31) 이상에서는 추가 권한 체크 필요
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            if (checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
+                Log.e(TAG, "BLUETOOTH_CONNECT permission is required.");
+                return false;
+            }
+            if (checkSelfPermission(Manifest.permission.BLUETOOTH_SCAN) != PackageManager.PERMISSION_GRANTED) {
+                Log.e(TAG, "BLUETOOTH_SCAN permission is required.");
+                return false;
+            }
+        } else {
+            if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+                Log.e(TAG, "ACCESS_FINE_LOCATION permission is required.");
                 return false;
             }
         }
@@ -437,7 +452,7 @@ public class BluetoothLeService extends Service {
                         byteList.add(b);
 
                         // 600바이트 청크가 찼을 때
-                        if (byteList.size() == 600) {
+                        if (byteList.size() == 500) {
                             byte[] chunk = new byte[byteList.size()];
                             for (int i = 0; i < byteList.size(); i++) {
                                 chunk[i] = byteList.get(i);
@@ -503,6 +518,15 @@ public class BluetoothLeService extends Service {
     }
 
     private void startForegroundService() {
+
+        // Android 13 (API 33) 이상에서는 POST_NOTIFICATIONS 권한 체크
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                Log.e(TAG, "POST_NOTIFICATIONS permission is required for foreground service.");
+                return;  // 권한이 없으면 포어그라운드 서비스 시작 안 함
+            }
+        }
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             NotificationChannel serviceChannel = new NotificationChannel(
                     CHANNEL_ID,
