@@ -12,6 +12,7 @@ import android.os.Bundle;
 import android.os.IBinder;
 import android.util.Log;
 import android.widget.Toast;
+import android.bluetooth.BluetoothAdapter;
 
 public class ExistDeviceActivity extends Activity {
 
@@ -69,6 +70,13 @@ public class ExistDeviceActivity extends Activity {
     // BLE 기기 연결 시도 메서드
     private void connectToExistingDevice() {
         if (mBluetoothLeService != null && deviceAddress != null) {
+            BluetoothAdapter bluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
+            if (bluetoothAdapter == null || !bluetoothAdapter.isEnabled()) {
+                Toast.makeText(this, "Bluetooth가 활성화되어 있지 않습니다.", Toast.LENGTH_SHORT).show();
+                navigateToLayoutChoice();
+                return;
+            }
+
             boolean result = mBluetoothLeService.connect(deviceAddress);
             if (result) {
                 Toast.makeText(this, "기기와 연결을 시도합니다.", Toast.LENGTH_SHORT).show();
@@ -78,6 +86,7 @@ public class ExistDeviceActivity extends Activity {
             }
         }
     }
+
 
     // 브로드캐스트 수신기: BluetoothLeService에서 보낸 연결 상태 업데이트
     private final BroadcastReceiver mGattUpdateReceiver = new BroadcastReceiver() {

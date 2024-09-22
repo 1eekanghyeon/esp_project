@@ -450,15 +450,26 @@ public class Layout2EditActivity extends AppCompatActivity {
         // 사용자 이름 가져오기
         SharedPreferences sharedPreferences = getSharedPreferences("AppPrefs", MODE_PRIVATE);
         String userName = sharedPreferences.getString("userName", "defaultUserName");
+        String savedDeviceMac = sharedPreferences.getString("deviceMac", null);  // 저장된 ESP32 MAC 주소
+        String currentDeviceMac = mBluetoothLeService != null ? mBluetoothLeService.getConnectedDeviceMac() : null;
 
-        // Firestore에 업로드
-        if (mBluetoothLeService != null && mBluetoothLeService.isConnected()) {
-            // BLE로 데이터 전송
-            Log.d("BLEStatus", "BLE Connected: " + mBluetoothLeService.isConnected());
-            mBluetoothLeService.sendHexArrayInChunks(hexArray);
-            Toast.makeText(Layout2EditActivity.this, "Data sent via BLE", Toast.LENGTH_SHORT).show();
+        Log.d("BLE_DEBUG", "Saved MAC Address: " + savedDeviceMac);
+        Log.d("BLE_DEBUG", "Current Connected MAC Address: " + currentDeviceMac);
+
+        if (currentDeviceMac != null && currentDeviceMac.equals(savedDeviceMac)) {
+            if (mBluetoothLeService != null && mBluetoothLeService.isConnected()) {
+                // BLE로 데이터 전송
+                Log.d("BLEStatus", "BLE Connected: " + mBluetoothLeService.isConnected());
+                mBluetoothLeService.sendHexArrayInChunks(hexArray);
+                Toast.makeText(Layout2EditActivity.this, "Data sent via BLE", Toast.LENGTH_SHORT).show();
+            } else {
+                // BLE 연결이 해제되었을 경우 Firestore로 전송
+                uploadHexArrayToFirestore(hexArray, userName);
+                Toast.makeText(Layout2EditActivity.this, "BLE disconnected. Data uploaded to Firestore", Toast.LENGTH_SHORT).show();
+            }
         } else {
-            // Firestore에 데이터 업로드
+            // 초기에 연결된 ESP32가 아니거나 BLE가 연결되지 않았을 때 Firestore로 전송
+            Log.d("BLEStatus", "Not connected to the initially paired device or BLE is disconnected");
             uploadHexArrayToFirestore(hexArray, userName);
             Toast.makeText(Layout2EditActivity.this, "Data uploaded to Firestore", Toast.LENGTH_SHORT).show();
         }

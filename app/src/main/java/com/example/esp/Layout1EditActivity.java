@@ -482,20 +482,33 @@ public class Layout1EditActivity extends AppCompatActivity {
         // SharedPreferences에서 저장된 사용자 이름을 가져오는 코드
         SharedPreferences sharedPreferences = getSharedPreferences("AppPrefs", MODE_PRIVATE);
         String userName = sharedPreferences.getString("userName", "");  // 저장된 사용자 이름을 가져옴
+        String savedDeviceMac = sharedPreferences.getString("deviceMac", null);  // 저장된 ESP32 MAC 주소
+        String currentDeviceMac = mBluetoothLeService != null ? mBluetoothLeService.getConnectedDeviceMac() : null;
+
+        Log.d("BLE_DEBUG", "Saved MAC Address: " + savedDeviceMac);
+        Log.d("BLE_DEBUG", "Current Connected MAC Address: " + currentDeviceMac);
 
         Log.d("BLE_DEBUG", "mConnected status: " + mConnected);
         Log.d("BLE_DEBUG", "mConnected status: " + mBluetoothLeService.isConnected());  // 연결 상태 확인
         // BLE 연결 상태에 따라 처리
-        if (mBluetoothLeService != null && mBluetoothLeService.isConnected()) {
-            // BLE로 데이터 전송
-            Log.d("BLEStatus", "BLE Connected: " + mBluetoothLeService.isConnected());
-            mBluetoothLeService.sendHexArrayInChunks(hexArray);
-            Toast.makeText(Layout1EditActivity.this, "Data sent via BLE", Toast.LENGTH_SHORT).show();
+        if (currentDeviceMac != null && currentDeviceMac.equals(savedDeviceMac)) {
+            if (mBluetoothLeService != null && mBluetoothLeService.isConnected()) {
+                // BLE로 데이터 전송
+                Log.d("BLEStatus", "BLE Connected: " + mBluetoothLeService.isConnected());
+                mBluetoothLeService.sendHexArrayInChunks(hexArray);
+                Toast.makeText(Layout1EditActivity.this, "Data sent via BLE", Toast.LENGTH_SHORT).show();
+            } else {
+                // BLE 연결이 해제되었을 경우 Firestore로 전송
+                uploadHexArrayToFirestore(hexArray, userName);
+                Toast.makeText(Layout1EditActivity.this, "BLE disconnected. Data uploaded to Firestore", Toast.LENGTH_SHORT).show();
+            }
         } else {
-            // Firestore에 데이터 업로드
+            // 초기에 연결된 ESP32가 아니거나 BLE가 연결되지 않았을 때 Firestore로 전송
+            Log.d("BLEStatus", "Not connected to the initially paired device or BLE is disconnected");
             uploadHexArrayToFirestore(hexArray, userName);
             Toast.makeText(Layout1EditActivity.this, "Data uploaded to Firestore", Toast.LENGTH_SHORT).show();
         }
+
         // 실시간 일정 업데이트
         fetchCalendarEvents();
 

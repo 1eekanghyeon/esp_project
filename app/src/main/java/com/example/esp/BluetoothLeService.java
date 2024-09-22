@@ -50,6 +50,11 @@ import java.util.Arrays;
 import android.os.Handler;
 import android.os.Looper;
 
+import android.content.BroadcastReceiver;
+import android.content.IntentFilter;
+
+
+
 /**
  * Service for managing connection and data communication with a GATT server hosted on a
  * given Bluetooth LE device.
@@ -131,15 +136,19 @@ public class BluetoothLeService extends Service {
                 mConnected = false;
                 Log.i(TAG, "Disconnected from GATT server.");
                 Log.d(TAG, "mConnected set to false");  // 디버그 메시지 추가
+
+                disconnect();
+                close();
                 broadcastUpdate(intentAction);
 
                 // 자동 재연결 시도, 5초 후에 재연결
-                new Handler(Looper.getMainLooper()).postDelayed(() -> {
-                    Log.i(TAG, "Attempting to reconnect...");
-                    connect(mBluetoothDeviceAddress);
-                }, 5000);  // 5초 후 재연결 시도
+//                new Handler(Looper.getMainLooper()).postDelayed(() -> {
+//                    Log.i(TAG, "Attempting to reconnect...");
+//                    connect(mBluetoothDeviceAddress);
+//                }, 10000);  // 5초 후 재연결 시도
             }
         }
+
         @Override
         public void onMtuChanged(BluetoothGatt gatt, int mtu, int status) {
             if (status == BluetoothGatt.GATT_SUCCESS) {
@@ -204,6 +213,28 @@ public class BluetoothLeService extends Service {
             broadcastUpdate(ACTION_DATA_AVAILABLE, characteristic);
         }
     };
+
+    private final BroadcastReceiver mBluetoothReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            final String action = intent.getAction();
+            if (BluetoothAdapter.ACTION_STATE_CHANGED.equals(action)) {
+                final int state = intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR);
+                switch (state) {
+                    case BluetoothAdapter.STATE_OFF:
+                        Log.d(TAG, "Bluetooth is off, disconnecting BLE connection.");
+                        disconnect();  // BLE 연결 해제
+                        close();       // GATT 자원 해제
+                        break;
+                    case BluetoothAdapter.STATE_ON:
+                        Log.d(TAG, "Bluetooth is on.");
+                        // 필요시 추가 로직
+                        break;
+                }
+            }
+        }
+    };
+
 
     // 인텐트 액션에 따라 브로드캐스트 업데이트를 전송하는 메서드들
 
@@ -292,6 +323,14 @@ public class BluetoothLeService extends Service {
 
         return true;
     }
+    @Override
+    public void onCreate() {
+        super.onCreate();
+        // Bluetooth 상태 변화 감지를 위한 BroadcastReceiver 등록
+        IntentFilter filter = new IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED);
+        registerReceiver(mBluetoothReceiver, filter);
+    }
+
 
     @SuppressLint("MissingPermission")
     public boolean connect(final String address) {
@@ -495,6 +534,14 @@ public class BluetoothLeService extends Service {
         Log.d(TAG, "Write status: " + status + " for chunk: " + Arrays.toString(chunk));
     }
 
+    @SuppressLint("MissingPermission")
+    public String getConnectedDeviceMac() {
+        if (mBluetoothGatt != null && mBluetoothGatt.getDevice() != null) {
+            return mBluetoothGatt.getDevice().getAddress();
+        }
+        return null;  // 연결된 장치가 없을 경우 null 반환
+    }
+
 
 
     private byte[] hexStringToByteArray(String hex) {
@@ -556,5 +603,9 @@ public class BluetoothLeService extends Service {
     public void onDestroy() {
         stopForeground(true);  // 서비스 종료 시 포어그라운드 중지
         super.onDestroy();
+        unregisterReceiver(mBluetoothReceiver);
+        // BLE 연결 해제 및 자원 정리
+        disconnect();
+        close();
     }
 }
